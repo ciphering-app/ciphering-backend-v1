@@ -25,6 +25,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(firebaseTokenFilter, UsernamePasswordAuthenticationFilter.class)
+                .httpBasic(basic -> {})
                 .csrf(AbstractHttpConfigurer::disable);
 
         return http.build();
