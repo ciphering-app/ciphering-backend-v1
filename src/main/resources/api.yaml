@@ -1,12 +1,33 @@
 openapi: 3.0.1
 info:
   title: CipheRing Backend APIs
-  description: Backend APIs for CipheRing by Sqewes
+  description: |
+    ## CipheRing Backend APIs v1.0.0
+
+    Backend APIs for CipheRing by Sqewes - A Secure Communication platform
+
+    ### Features
+    - Phone number Masking
+
+    ### Authentication
+    - Firebase JWT Authentication
+
+    ### Rate Limiting
+    - Registration: 5 request per minute per IP
+    - User Settings: 10 request per minute per User
+    - General: 100 request per minute per IP
+
+    ### Support
+    - Email:
+    - Docs:
   version: 1.0.0
 
 servers:
   - url: http://localhost:8080
-    description: Local server
+    description: Local development server
+
+security:
+  - FirebaseAuth: []
 
 paths:
   /health:
@@ -15,7 +36,7 @@ paths:
       description: Returns a simple OK string
       operationId: getHealth
       tags:
-        - Health
+        - System
       responses:
         '200':
           description: Application is running
@@ -24,15 +45,41 @@ paths:
               schema:
                 type: string
                 example: OK
+          headers:
+            X-Response-Time:
+              schema:
+                type: string
+                example: 100ms
+              description: Response time in milliseconds
+            X-Service-Version:
+              schema:
+                type: string
+                example: 1.0.0
+              description: Current Service version
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Server Temporarily Unavailable"
+                errorCode: "500"
+                timestamp: 2021-01-01T00:00:00Z
+
   /user/register:
     post:
-      summary: Register a new user
-      description: Register a new user
+      summary: Register New User
+      description: |
+        Register a new user with the given phone number and full name.
+        Validation Rules:
+        - Phone number must be 10 digits
+        - Full name must be 6 - 50 characters, alphanumeric and spaces only
+        - Phone number must be unique
       operationId: register
       tags:
-        - User
+        - User Management
+      security: []
       requestBody:
         required: true
         content:
@@ -46,6 +93,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserRegistrationResponse'
+          headers:
+            X-Rate-Limit-Remaining:
+              schema:
+                type: integer
+                example: 49
+              description: Number of requests remaining in the current rate limit window
+            Location:
+              schema:
+                type: string
+                example: /user/123
+              description: URL of the newly created user
         '400':
           description: Bad request - Invalid input data
           content:
@@ -58,6 +116,140 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                example: 60
+              description: Number of seconds to wait before retrying
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/settings:
+    get:
+      summary: Get User Settings
+      description: |
+        Get the user settings for the current user.
+      operationId: getUserSettings
+      tags:
+        - User Management
+      parameters:
+        - name: userId
+          in: query
+          description: User ID
+          required: true
+          schema:
+            type: string
+            pattern: '^user_[a-zA-Z0-9]{12}$'
+      responses:
+        '200':
+          description: User settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+        '400':
+          description: Bad request - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - Invalid or missing JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - User does not have permission to access this resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found - User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update User Settings
+      description: |
+        Update the user settings for the current user.
+      operationId: updateUserSettings
+      tags:
+        - User Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettingsUpdateRequest'
+      responses:
+        '200':
+          description: User settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+        '400':
+          description: Bad request - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - Invalid or missing JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - User does not have permission to access this resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found - User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unprocessable Entity - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
           content:
@@ -66,6 +258,13 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  securitySchemes:
+    FirebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase JWT authentication
+
   schemas:
     UserRegistrationRequest:
       type: object
@@ -75,24 +274,68 @@ components:
       properties:
         phoneNumber:
           type: string
-          description: User's phone number
+          description: User's 10 digit phone number (Indian Format)
           example: "9876543210"
-          pattern: "^[0-9]{10}$"
+          pattern: "^[0-6][0-9]{9}$"
+          minLength: 10
+          maxLength: 10
         userName:
           type: string
-          description: User's full name
+          description: User's full name (6-50 characters, alphanumeric and spaces only)
           example: "john doe"
-          minLength: 1
-          maxLength: 100
+          pattern: "^[a-zA-Z0-9 ]{6,50}$"
+          minLength: 6
+          maxLength: 50
+
     UserRegistrationResponse:
       type: object
+      required:
+        - message
+        - userId
+        - registeredAt
       properties:
         message:
           type: string
           example: "User registered successfully"
         userId:
           type: string
-          example: "user123"
+          pattern: "^user_[a-zA-Z0-9]{12}$"
+          example: "user_1234567890"
+        registeredAt:
+          type: string
+          format: date-time
+          example: "2021-01-01T00:00:00Z"
+      additionalProperties: false
+
+    UserSettingsUpdateRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          pattern: "^user_[a-zA-Z0-9]{12}$"
+          example: "user_1234567890"
+        userName:
+          type: string
+          description: User's full name (6-50 characters, alphanumeric and spaces only)
+          example: "john doe"
+          pattern: "^[a-zA-Z0-9 ]{6,50}$"
+          minLength: 6
+          maxLength: 50
+        premium:
+          type: boolean
+          description: User's premium status
+          example: true
+      additionalProperties: false
+
+    UserSettingsResponse:
+      type: object
+      required:
+        - userId
+        - userName
+        - premium
+        - registeredAt
     ErrorResponse:
       type: object
       properties:
